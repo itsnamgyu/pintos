@@ -339,18 +339,20 @@ cond_broadcast (struct condition *cond, struct lock *lock)
 }
 
 #ifdef USERPROG
-
 void busy_waits (struct thread* t)
 {
+	ASSERT (is_thread (t));
+
+	/* If it is already waiting, return. */
 	if (t->LKY)
 		return;
 
+	/* Busy waiting. */
 	t->LKY = true;
-	//printf("[debug] %s(%d) is busy waiting...", t->name, t->tid);
 	while (t->SJW == false)
 		barrier ();
-	//printf("[debug] %s(%d) ends its wait!\n", t->name, t->tid);
 
+	/* Set false for further waits.*/
 	t->SJW = false;
 	t->LKY = false;
 }
@@ -397,6 +399,5 @@ void busy_wait_trigger (struct busy_wait_s *bw)
 	/* triggers SJW to wake the busy-waiting thread.  */
 	bw->SJW = true;
 	intr_set_level (old_level);
-
 }
 #endif

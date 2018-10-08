@@ -126,37 +126,31 @@ process_wait (tid_t child_tid UNUSED)
 	{
 		child = list_entry (e, struct thread, siblings);
 
+		/* Wait for child only if it needs to be waited. */
 		if (child_tid == child->tid && child->needs_wait)
 		{
-			//printf("[debug] process_wait(): called by %s (%d)\n", parent->name, parent->tid);
-			//printf("[debug] process_wait(): %s waits..\n", parent->name);
-			//busy_wait_wait (&parent->wait);
-
-			
 			/* Parent waits for child with TID to execute. */
 			busy_waits(parent);
-
-			//printf("[debug] process_wait(): %s retrieved child's exit\n", parent->name);
 
 			/* EXIT_STATUS should be retrieved;
 			 * it is triggered right before it dies. */
 			exit_status = child->exit_status;
 
-			//printf("[debug] process_wait(): %s triggered!\n", child->name);
-			//busy_wait_trigger (&child->wait);
-			
 			/* Since EXIT_STATUS is retrieved, child
 			 * is allowed to exit. */
 			busy_end(child);
 
 			/* Child no longer needs to be waited. */
 			child->needs_wait = false;
+			
+			/* If no waiting is done, child should be NULL. */
 			break;
 		}
 		child = NULL;
 	}
 
-	/* Child with TID is not found; immediately return -1. */
+	/* Child with TID is not found OR child doesn't need wait;
+	 * immediately return -1. */
 	if (child == NULL)
 		exit_status = -1;
 
@@ -190,19 +184,11 @@ process_exit (void)
       pagedir_destroy (pd);
     }
 
-  /* Project USERPROG */
-
-  //printf("[debug] process_exit(): %s triggered!\n", parent->name);
-  //busy_wait_trigger (&parent->wait);
-
   /* In this part of code, parent is still suspended, which cannot
    * retrieve the status. The problem is, a currently blocked
    * thread cannot be re-blocked. Therefore we have to be sure
    * that the parent is busy-waiting for only one condition. */
   busy_end(parent);
-
-  //printf("[debug] process_exit(): %s waits ..\n", cur->name);
-  //busy_wait_wait (&cur->wait);
 
   /* After this, the parent thread will immediately retrieve the
    * exit status of the current running thread, and waits for
@@ -418,10 +404,12 @@ load (const char *file_name, void (**eip) (void), void **esp)
   if (!setup_stack (esp))
     goto done;
   
+  /* Make a copy of file_name. */
   for (i = 0; i < file_name_size; ++i)
 	  file_name_[i] = file_name[i];
+  file_name_[i] = '\0';
 
-  /* Project USERPROG */
+  /* Argument passing. */
   construct_stack (file_name_, esp);
 
   /* Start address. */
@@ -436,7 +424,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
 }
 
 /* load() helpers. */
-
 static bool install_page (void *upage, void *kpage, bool writable);
 
 /* Checks whether PHDR describes a valid, loadable segment in
@@ -590,6 +577,8 @@ construct_stack (char *file_name_, void **esp)
 
 		/* Save the length of each argument. */
 		argl[i] = strlen (argv[i]);
+
+		/* j is the index to the next argument.*/
 		j += argl[i];
 		if (i)
 			j++;
