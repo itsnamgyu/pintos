@@ -1,0 +1,2 @@
+# pintos
+kyu-gyu
