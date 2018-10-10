@@ -93,8 +93,7 @@ start_process (void *file_name_)
 	t->is_loaded = false;
 
 	/* The waiting of parent is triggered by process_exit(). 
-	 * It calls exit() calls thread_exit and process_exit()
-	 * as well. */
+	 * exit() calls thread_exit() and process_exit() as well. */
 	exit(-1);
   }
 
