@@ -175,7 +175,6 @@ thread_create (const char *name, int priority,
   tid_t tid;
   enum intr_level old_level;
 
-  //puts("[debug] thread_create(): start");
   ASSERT (function != NULL);
 
   /* Allocate thread. */
@@ -210,15 +209,13 @@ thread_create (const char *name, int priority,
   intr_set_level (old_level);
 
 #ifdef USERPROG
+  /* Assign parent and add to children list. */
   t->parent = thread_current ();
   list_push_front (&thread_current ()->children, &t->siblings);
 #endif
 
   /* Add to run queue. */
   thread_unblock (t);
-  
-  //printf("[debug] thread_create(): creation of %s done\n", t->name);
-
   return tid;
 }
 
@@ -473,7 +470,6 @@ init_thread (struct thread *t, const char *name, int priority)
   ASSERT (PRI_MIN <= priority && priority <= PRI_MAX);
   ASSERT (name != NULL);
 
-  //puts("[debug] init_thread");
   memset (t, 0, sizeof *t);
   t->status = THREAD_BLOCKED;
   strlcpy (t->name, name, sizeof t->name);
@@ -483,8 +479,8 @@ init_thread (struct thread *t, const char *name, int priority)
   list_push_back (&all_list, &t->allelem);
 
 #ifdef USERPROG
+  /* Initialize new members added. */
   list_init (&t->children);
-  busy_wait_init (&t->wait);
   t->SJW = false;
   t->LKY = false;
   t->exit_status = 0;

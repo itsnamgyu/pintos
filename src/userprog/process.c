@@ -17,6 +17,8 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "syscall.h"
+#include "lib/user/syscall.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -83,13 +85,17 @@ start_process (void *file_name_)
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
+
   /* Failed loading. Not because of the absence of file. */
   if (!success) 
   {
-	//printf("[debug] start_process(): %s triggered!\n", t->parent->name);
-	//busy_wait_trigger (&t->parent->wait);
+	/* What should exit_status of a failed process be? */
 	t->is_loaded = false;
-    thread_exit ();
+
+	/* The waiting of parent is triggered by process_exit(). 
+	 * It calls exit() calls thread_exit and process_exit()
+	 * as well. */
+	exit(-1);
   }
 
   /* Start the user process by simulating a return from an
@@ -121,7 +127,6 @@ process_wait (tid_t child_tid UNUSED)
 	int exit_status;
 
 	e = list_head (&parent->children);
-
 	while ((e = list_next (e)) != list_end (&parent->children))
 	{
 		child = list_entry (e, struct thread, siblings);
@@ -183,6 +188,15 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
+
+  /* If there are any children which needs to be waited, it
+   * should be handled here, where the parent process is still
+   * waiting.*/
+
+  /* Even if the process fails loading, this part is reached with
+   * the parent currently waiting. */
+
+  /* In case of busy waiting implementation ... */
 
   /* In this part of code, parent is still suspended, which cannot
    * retrieve the status. The problem is, a currently blocked
@@ -610,7 +624,7 @@ construct_stack (char *file_name_, void **esp)
 	}
 	buffer[3 + argc] = 0;
 
-	/* Copu everything in buffer to stack */
+	/* Copy everything in buffer to stack */
 	memcpy (*esp, buffer, (argc + 4)*sizeof(size_t));
 }
 

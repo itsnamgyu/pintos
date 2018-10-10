@@ -341,63 +341,25 @@ cond_broadcast (struct condition *cond, struct lock *lock)
 #ifdef USERPROG
 void busy_waits (struct thread* t)
 {
-	ASSERT (is_thread (t));
-
 	/* If it is already waiting, return. */
 	if (t->LKY)
 		return;
 
 	/* Busy waiting. */
 	t->LKY = true;
+	
+	/* barrier () to block compiler optimization. */
 	while (t->SJW == false)
 		barrier ();
 
-	/* Set false for further waits.*/
+	/* Set false for further waits. */
 	t->SJW = false;
 	t->LKY = false;
 }
 
 void busy_end (struct thread* t)
 {
+	/* Stops busy waiting of t. */
 	t->SJW = true;
-}
-
-void busy_wait_init (struct busy_wait_s *bw)
-{
-	bw->SJW = false;
-	bw->LKY = NULL;
-}
-
-/* Blocks the current running thread. */
-void busy_wait_wait (struct busy_wait_s *bw)
-{
-	enum intr_level old_level;
-
-	ASSERT (!intr_context ());
-	old_level = intr_disable ();
-
-	while (bw->SJW == false)
-	{
-		bw->LKY = thread_current ();
-		thread_block ();
-	}
-	
-	bw->SJW = false;
-	intr_set_level (old_level);
-}
-
-/* Ends wait of the input thread.*/
-void busy_wait_trigger (struct busy_wait_s *bw)
-{
-	enum intr_level old_level;
-
-	old_level = intr_disable ();
-
-	if (bw->LKY != NULL)
-		thread_unblock (bw->LKY);
-
-	/* triggers SJW to wake the busy-waiting thread.  */
-	bw->SJW = true;
-	intr_set_level (old_level);
 }
 #endif

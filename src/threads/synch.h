@@ -43,16 +43,6 @@ void cond_broadcast (struct condition *, struct lock *);
 
 
 #ifdef USERPROG
-struct busy_wait_s
-{
-	struct thread *LKY;
-	bool SJW;
-};
-
-void busy_wait_init (struct busy_wait_s *bw);
-void busy_wait_wait (struct busy_wait_s *bw);
-void busy_wait_trigger (struct busy_wait_s *bw);
-
 void busy_waits (struct thread*);
 void busy_end (struct thread*);
 #endif

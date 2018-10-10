@@ -152,7 +152,7 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-  /* If it is not a valid address, make a page fault. */
+  /* If it is not a valid address, exit. */
   if (!user || is_kernel_vaddr(fault_addr))
 	  exit(-1);
 

@@ -21,7 +21,7 @@ syscall_init (void)
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
-/* The arguments are stacked from f->esp. */
+/* The arguments are stacked at f->esp. */
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
@@ -37,20 +37,20 @@ syscall_handler (struct intr_frame *f UNUSED)
 
 	  case SYS_EXIT:
 		  if (!is_user_valid (f_esp + WORD))
-			  exit(-1);
+			  exit (-1);
 
-		  exit((int) *(uint32_t *) (f_esp + WORD));
+		  exit ((int) *(uint32_t *) (f_esp + WORD));
 		  break;
 
 	  case SYS_EXEC:
 		  if (!is_user_valid (f_esp + WORD))
-			  exit(-1);
+			  exit (-1);
 
 		  f->eax = exec ((const char*) *(uint32_t *) (f_esp + WORD));
 		  break;
 
 	  case SYS_WAIT:
-		  f->eax = wait((pid_t) *(uint32_t *) (f_esp + WORD));
+		  f->eax = wait ((pid_t) *(uint32_t *) (f_esp + WORD));
 		  break;
 
 	  case SYS_CREATE:
@@ -67,13 +67,13 @@ syscall_handler (struct intr_frame *f UNUSED)
 
 	  case SYS_READ:
 		  if (!is_user_valid (f_esp + WORD))
-			  exit(-1);
+			  exit (-1);
 
 		  if (!is_user_valid (f_esp + 2*WORD))
-			  exit(-1);
+			  exit (-1);
 
 		  if (!is_user_valid (f_esp + 3*WORD))
-			  exit(-1);
+			  exit (-1);
 
 		  read ((int) *(uint32_t *) (f_esp + WORD),
 				(void *) *(uint32_t *) (f_esp + 2*WORD),
@@ -95,6 +95,7 @@ syscall_handler (struct intr_frame *f UNUSED)
 	  case SYS_CLOSE:
 		  break;
 
+		  /* Additional System calls. */
 	  case SYS_FIBONACCI:
 		  fibonacci ((int) *(uint32_t *) (f_esp + WORD));
 		  break;
@@ -111,13 +112,17 @@ syscall_handler (struct intr_frame *f UNUSED)
 void
 halt (void)
 {
+	/* Simply call shutdown_power_off (). */
 	shutdown_power_off ();
 }
 
 void
 exit (int status)
 {
+	/* Assign the exit status of thread. */
 	thread_current ()->exit_status = status;
+
+	/* Print necessary format. */
 	printf("%s: exit(%d)\n", thread_name (), status);
 
 	/* thread_exit() calls process_exit(). */
@@ -126,11 +131,13 @@ exit (int status)
 
 pid_t exec (const char *file)
 {
+	/* Simply call process_execute(). */
 	return process_execute(file);
 }
 
 int wait (pid_t pid)
 {
+	/* Simply call process_wait(). */
 	return process_wait(pid);
 }
 
@@ -138,6 +145,7 @@ int read (int fd, void *buffer, unsigned length)
 {
 	unsigned i = 0;
 
+	/* Read the whole buffer. */
 	if (!fd)
 		while (((char *) buffer)[i] != '\0' && ++i < length);
 
@@ -156,6 +164,7 @@ int write (int fd, const void *buffer, unsigned length)
 		return -1;
 }
 
+/* Check if it is not pointing kernel memory space. */
 bool is_user_valid (void *addr)
 {
 	if (!is_user_vaddr (addr))
@@ -188,7 +197,9 @@ fibonacci (int n)
 int
 sum_of_four_integers (int a, int b, int c, int d)
 {
-	printf("sum_of_four_integers(%d, %d, %d, %d) = %d",
-			a, b, c, d, a + b + c + d);
-	return a + b + c + d;
+	int sum = a + b + c + d;
+
+	printf("sum_of_four_integers (%d, %d, %d, %d) = %d\n",
+			a, b, c, d, sum);
+	return sum;
 }

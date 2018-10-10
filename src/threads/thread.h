@@ -99,12 +99,12 @@ struct thread
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
 
-	/* New elements */
+	/* New elements. */
 	struct thread *parent;              /* Pointer to parent. */
 	struct list children;               /* List of children. */
 	struct list_elem siblings;          /* list_elem for children. */
 
-	struct busy_wait_s wait;            /* Variable for waiting. */
+	/* Volatile for busy wait */
 	volatile bool SJW;                  /* Condition variable for busy waiting. */
 	volatile bool LKY;                  /* Set if this thread is currently busy waiting. */
 
