@@ -104,24 +104,19 @@ struct thread
     struct list children;               /* List of children. */
     struct list_elem siblings;          /* list_elem for children. */
 
-    /* Volatile for busy wait */
-    volatile bool SJW;                  /* Condition variable for busy waiting. */
-    volatile bool LKY;                  /* Set if this thread is currently busy waiting. */
-
     int exit_status;                    /* Exit status. */
     bool needs_wait;                    /* If process is waited, set false. */
     bool is_loaded;                     /* If load fails, set false. */
 
-    /* New for Project 2 */
-    struct semaphore sema_wait;
-    struct semaphore sema_exit;
-    struct semaphore sema_load;
+    struct semaphore sema_load;         /* For start_process(). */
+    struct semaphore sema_wait;         /* For process_wait(). */
+    struct semaphore sema_exit;         /* For process_exit(). */
 
-    bool is_child_zombie;
+    bool is_child_loaded;               /* To check whether child is loaded. */
 
-    int fd_next;
-    struct list file_list;
-    struct file *rfile;
+    int fd_next;                        /* Vairable to store the next fd. */
+    struct list file_list;              /* List of open files. */
+    struct file *executable;            /* Executable file of process.*/
 #endif
 
     /* Owned by thread.c. */

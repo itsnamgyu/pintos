@@ -490,10 +490,10 @@ init_thread (struct thread *t, const char *name, int priority)
   t->is_loaded = false;
 
   /*Project 2*/
+  sema_init (&t->sema_load, 0);
   sema_init (&t->sema_wait, 0);
   sema_init (&t->sema_exit, 0);
-  sema_init (&t->sema_load, 0);
-  t->is_child_zombie = false;
+  t->is_child_loaded = false;
   t->fd_next = 2;
   list_init (&t->file_list);
 #endif

@@ -38,9 +38,9 @@ process_execute (const char *file_name)
 
   /* Parse the actual file name. */
   for (i = 0;
-	   file_name[i] != '\0' && file_name[i] != ' ' && file_name[i] != '\t';
-	   ++i)
-	   file_name_[i] = file_name[i];
+       file_name[i] != '\0' && file_name[i] != ' ' && file_name[i] != '\t';
+       ++i)
+    file_name_[i] = file_name[i];
   file_name_[i] = '\0';
 
   /* Make a copy of FILE_NAME.
@@ -75,6 +75,7 @@ start_process (void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
 
+  /* Free page since loading is finished. */
   palloc_free_page (file_name);
 
   /* Check whether loading is successful. In both cases,
@@ -84,9 +85,11 @@ start_process (void *file_name_)
       /* The child failed loading */
       t->is_loaded = false;
 
-      /* Notice parent that this process is a zombie. */
-      t->parent->is_child_zombie = true;
+      /* Notice parent that this process failed loading. */
+      t->parent->is_child_loaded = true;
       sema_up (&t->parent->sema_load);
+
+      /* Exits by itself since parent does not wait. */
       exit(-1);
   }
 
@@ -97,8 +100,8 @@ start_process (void *file_name_)
       sema_up (&t->parent->sema_load);
 
       /* Deny writes to the file which is loaded on the process. */
-      t->rfile = filesys_open (t->name);
-      file_deny_write (t->rfile);
+      t->executable = filesys_open (t->name);
+      file_deny_write (t->executable);
   }
 
   /* Start the user process by simulating a return from an
@@ -193,8 +196,9 @@ process_exit (void)
       pagedir_destroy (pd);
     }
 
+  /* Close the executable file of this thread to allow writes. */
   if (cur->is_loaded)
-    file_close (cur->rfile);
+    file_close (cur->executable);
 
   /* The case of crashed process; parent does not wait because
    * exec() did not return a valid pid when failed load. It has
@@ -208,33 +212,20 @@ process_exit (void)
   {
     e = list_pop_front (&cur->file_list);
     fw = list_entry (e, struct file_wrapper, file_elem);
-    /* !!!!!!!!!!!!!! */
+
+    /* Why not close(fw->fd)? */
     file_close (fw->f);
-    close (fw->fd);
     free(fw);
   }
 
-  /* If there are any children which needs to be waited, it
-   * should be handled here, where the parent process is still
-   * waiting.*/
-  e = list_head (&cur->children);
-  while ((e = list_next (e)) != list_end (&cur->children))
-  {
-    child = list_entry (e, struct thread, siblings);
-    sema_up (&child->sema_exit);
-  }
-
   /* In this part of code, parent is still suspended, which cannot
-   * retrieve the status. */
+   * retrieve the status. Hence, notice the parent. */
   sema_up(&cur->sema_wait);
 
   /* Waits for the parent to retrieve the exit status. */
   sema_down(&cur->sema_exit);
 
 exit:
-  ASSERT (list_empty (&cur->file_list));
-  ASSERT (list_empty (&cur->children));
-
   /* Remove current process from parent's list */
   e = list_head (&parent->children);
   while ((e = list_next (e)) != list_end (&parent->children))
@@ -242,8 +233,6 @@ exit:
     child = list_entry (e, struct thread, siblings);
     if (cur->tid == child->tid)
       list_remove (e);
-
-    child = NULL;
   }
 }
 

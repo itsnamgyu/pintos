@@ -66,7 +66,7 @@ syscall_handler (struct intr_frame *f UNUSED)
 
         case SYS_CREATE:
             if (!is_user_valid (f_esp + WORD)
-                || !is_user_valid (f_esp + 2*WORD))
+             || !is_user_valid (f_esp + 2*WORD))
                 exit (-1);
 
             f->eax = create ((const char*) *(uint32_t *) (f_esp + WORD),
@@ -95,13 +95,9 @@ syscall_handler (struct intr_frame *f UNUSED)
             break;
 
         case SYS_READ:
-            if (!is_user_valid (f_esp + WORD))
-                exit (-1);
-
-            if (!is_user_valid (f_esp + 2*WORD))
-                exit (-1);
-
-            if (!is_user_valid (f_esp + 3*WORD))
+            if (!is_user_valid (f_esp + WORD)
+             || !is_user_valid (f_esp + 2*WORD)
+             || !is_user_valid (f_esp + 3*WORD))
                 exit (-1);
 
             f->eax = read ((int) *(uint32_t *) (f_esp + WORD),
@@ -137,7 +133,7 @@ syscall_handler (struct intr_frame *f UNUSED)
             close ((int) *(uint32_t *) (f_esp + WORD));
             break;
 
-            /* Additional System calls. */
+            /* Additional System calls for Sogang Univ. */
         case SYS_FIBONACCI:
             fibonacci ((int) *(uint32_t *) (f_esp + WORD));
             break;
@@ -201,9 +197,10 @@ exec (const char *file)
      * */
 
     /* Case 1) & 2): Thread exits; it needs to be freed. */
-    if (t->is_child_zombie)
+    if (t->is_child_loaded)
     {
-        t->is_child_zombie = false;
+        /* Reset for re-use. */
+        t->is_child_loaded = false;
         tid = -1;
     }
 
@@ -214,9 +211,7 @@ exec (const char *file)
 int
 wait (pid_t pid)
 {
-    /* No need to wait for invalid pid. */
-    if (pid == -1)
-        return -1;
+    /* Everything is done in process_wait(). */
     return process_wait(pid);
 }
 
@@ -228,10 +223,8 @@ create (const char *file, unsigned initial_size)
     if(!is_user_valid(file))
         exit (-1);
 
-    /* Synchronization needed. */
-    lock_acquire (&syscall_lock);
+    /* Via filesys.c */
     result = filesys_create (file, initial_size);
-    lock_release (&syscall_lock);
 
     return result;
 }
@@ -259,22 +252,23 @@ open (const char *file)
     struct thread *t = thread_current ();
     struct file_wrapper *fw;
 
+    /* Not a valid parameter. */
     if (!is_user_valid(file))
         exit (-1);
 
-    /* Synchronization needed. */
-    lock_acquire (&syscall_lock);
+    /* Open file via filesys.c. */
     f = filesys_open(file);
-    lock_release (&syscall_lock);
 
+    /* Open fails; return error code. */
     if (!f)
         return -1;
 
+    /* Open success; allocate memory to save it. */
     fw = (struct file_wrapper *) malloc (sizeof (struct file_wrapper));
-
     fw->fd = t->fd_next++;
     fw->f = f;
 
+    /* Add to file list. */
     list_push_front (&t->file_list, &fw->file_elem);
     return fw->fd;
 }
@@ -284,6 +278,7 @@ filesize (int fd)
 {
     struct file *f = fd2file (fd);
 
+    /* File not found in file list. */
     if (!f)
         return -1;
 
@@ -394,17 +389,15 @@ tell (int fd)
 void
 close (int fd)
 {
-    struct thread *t;
-    struct list_elem *e;
+    struct thread *t = thread_current ();
+    struct list_elem *e = list_head (&t->file_list);
     struct file_wrapper *fw;
-
-    t = thread_current ();
-    e = list_head (&t->file_list);
 
     while ((e = list_next (e)) != list_end (&t->file_list))
     {
         fw = list_entry (e, struct file_wrapper, file_elem);
 
+        /* Close file and free dynamic memory.*/
         if (fw->fd == fd)
         {
             file_close (fw->f);
@@ -412,7 +405,6 @@ close (int fd)
             free(fw);
             break;
         }
-        fw = NULL;
     }
 }
 int
@@ -450,6 +442,7 @@ sum_of_four_integers (int a, int b, int c, int d)
 bool
 is_user_valid (const void *addr)
 {
+    /* NULL address, kernel address, invalid page. */
     if (addr 
             && is_user_vaddr (addr)
             && pagedir_get_page (thread_current ()->pagedir, addr))
@@ -458,6 +451,8 @@ is_user_valid (const void *addr)
         return false;
 }
 
+/* Returns the file pointer of corresponding file descriptor. 
+ * It searches only in the current process's file list. */
 static struct file*
 fd2file (int fd)
 {
@@ -476,6 +471,7 @@ fd2file (int fd)
         fw = NULL;
     }
 
+    /* if found, return the file pointer. */
     if(fw)
         return fw->f;
     else
