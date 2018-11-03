@@ -19,6 +19,7 @@
 #include "threads/vaddr.h"
 #include "syscall.h"
 #include "lib/user/syscall.h"
+#include "threads/malloc.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -34,7 +35,6 @@ process_execute (const char *file_name)
   tid_t tid;
   int i;
   char file_name_[15];
-  struct file *HNG;
 
   /* Parse the actual file name. */
   for (i = 0;
@@ -42,13 +42,6 @@ process_execute (const char *file_name)
 	   ++i)
 	   file_name_[i] = file_name[i];
   file_name_[i] = '\0';
-
-  /* Dummy vairiable to check presence of file.*/
-  HNG = filesys_open(file_name_);
-  if (HNG == NULL)
-	  return TID_ERROR;
-  else
-	  file_close (HNG);
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
@@ -60,7 +53,7 @@ process_execute (const char *file_name)
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name_, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
+    palloc_free_page (fn_copy);
 
   return tid;
 }
@@ -75,7 +68,6 @@ start_process (void *file_name_)
   bool success;
   struct thread *t = thread_current ();
 
-
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
@@ -83,18 +75,30 @@ start_process (void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
 
-  /* If load failed, quit. */
   palloc_free_page (file_name);
 
-  /* Failed loading. Not because of the absence of file. */
+  /* Check whether loading is successful. In both cases,
+   * we have to UP the parent's SEMA_LOAD. */
   if (!success) 
   {
-	/* What should exit_status of a failed process be? */
-	t->is_loaded = false;
+      /* The child failed loading */
+      t->is_loaded = false;
 
-	/* The waiting of parent is triggered by process_exit(). 
-	 * exit() calls thread_exit() and process_exit() as well. */
-	exit(-1);
+      /* Notice parent that this process is a zombie. */
+      t->parent->is_child_zombie = true;
+      sema_up (&t->parent->sema_load);
+      exit(-1);
+  }
+
+  else
+  {
+      /* The child successfuly loaded. */
+      t->is_loaded = true;
+      sema_up (&t->parent->sema_load);
+
+      /* Deny writes to the file which is loaded on the process. */
+      t->rfile = filesys_open (t->name);
+      file_deny_write (t->rfile);
   }
 
   /* Start the user process by simulating a return from an
@@ -118,47 +122,47 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid) 
 {
-	struct thread *parent = thread_current();
-	struct thread *child = NULL;
-	struct list_elem *e;
-	int exit_status;
+    struct thread *parent = thread_current();
+    struct thread *child = NULL;
+    struct list_elem *e;
+    int exit_status;
 
-	e = list_head (&parent->children);
-	while ((e = list_next (e)) != list_end (&parent->children))
-	{
-		child = list_entry (e, struct thread, siblings);
+    e = list_head (&parent->children);
+    while ((e = list_next (e)) != list_end (&parent->children))
+    {
+        child = list_entry (e, struct thread, siblings);
 
-		/* Wait for child only if it needs to be waited. */
-		if (child_tid == child->tid && child->needs_wait)
-		{
-			/* Parent waits for child with TID to execute. */
-			busy_waits(parent);
+        /* Wait for child only if it needs to be waited. */
+        if (child_tid == child->tid && child->needs_wait)
+        {
+            /* Parent waits for child with TID to execute. */
+            sema_down (&child->sema_wait);
 
-			/* EXIT_STATUS should be retrieved;
-			 * it is triggered right before it dies. */
-			exit_status = child->exit_status;
+            /* EXIT_STATUS should be retrieved;
+             * it is triggered right before it dies. */
+            exit_status = child->exit_status;
 
-			/* Since EXIT_STATUS is retrieved, child
-			 * is allowed to exit. */
-			busy_end(child);
+            /* Since EXIT_STATUS is retrieved, child
+             * is allowed to exit. */
+            sema_up (&child->sema_exit);
 
-			/* Child no longer needs to be waited. */
-			child->needs_wait = false;
-			
-			/* If no waiting is done, child should be NULL. */
-			break;
-		}
-		child = NULL;
-	}
+            /* Child no longer needs to be waited. */
+            child->needs_wait = false;
 
-	/* Child with TID is not found OR child doesn't need wait;
-	 * immediately return -1. */
-	if (child == NULL)
-		exit_status = -1;
+            /* If no waiting is done, child should be NULL. */
+            break;
+        }
+        child = NULL;
+    }
 
-	return exit_status;
+    /* Child with TID is not found OR child doesn't need wait;
+     * immediately return -1. */
+    if (child == NULL)
+        exit_status = -1;
+
+    return exit_status;
 }
 
 /* Free the current process's resources. */
@@ -168,6 +172,7 @@ process_exit (void)
   struct thread *cur = thread_current ();
   struct thread *parent = cur->parent;
   struct thread *child;
+  struct file_wrapper *fw;
   struct list_elem *e;
   uint32_t *pd;
 
@@ -188,41 +193,58 @@ process_exit (void)
       pagedir_destroy (pd);
     }
 
+  if (cur->is_loaded)
+    file_close (cur->rfile);
+
+  /* The case of crashed process; parent does not wait because
+   * exec() did not return a valid pid when failed load. It has
+   * to deallocate resources itself, if necessary.
+   * Crashed process cannot open any files or spawn children. */
+  else 
+    goto exit;
+
+  /* Close all open files */
+  while (!list_empty (&cur->file_list))
+  {
+    e = list_pop_front (&cur->file_list);
+    fw = list_entry (e, struct file_wrapper, file_elem);
+    /* !!!!!!!!!!!!!! */
+    file_close (fw->f);
+    close (fw->fd);
+    free(fw);
+  }
+
   /* If there are any children which needs to be waited, it
    * should be handled here, where the parent process is still
    * waiting.*/
-
-  /* Even if the process fails loading, this part is reached with
-   * the parent currently waiting. */
-
-  /* In case of busy waiting implementation ... */
+  e = list_head (&cur->children);
+  while ((e = list_next (e)) != list_end (&cur->children))
+  {
+    child = list_entry (e, struct thread, siblings);
+    sema_up (&child->sema_exit);
+  }
 
   /* In this part of code, parent is still suspended, which cannot
-   * retrieve the status. The problem is, a currently blocked
-   * thread cannot be re-blocked. Therefore we have to be sure
-   * that the parent is busy-waiting for only one condition. */
-  busy_end(parent);
+   * retrieve the status. */
+  sema_up(&cur->sema_wait);
 
-  /* After this, the parent thread will immediately retrieve the
-   * exit status of the current running thread, and waits for
-   * the exit of its child. */
-  busy_waits(cur);
+  /* Waits for the parent to retrieve the exit status. */
+  sema_down(&cur->sema_exit);
 
-  /* Remove child from parent's list */
+exit:
+  ASSERT (list_empty (&cur->file_list));
+  ASSERT (list_empty (&cur->children));
+
+  /* Remove current process from parent's list */
   e = list_head (&parent->children);
   while ((e = list_next (e)) != list_end (&parent->children))
   {
     child = list_entry (e, struct thread, siblings);
+    if (cur->tid == child->tid)
+      list_remove (e);
 
-      if (cur->tid == child->tid)
-        break;
-
-  /* Is this necessary? */
-	child = NULL;
+    child = NULL;
   }
-
-  if (child)
-	list_remove (e);
 }
 
 /* Sets up the CPU for running user code in the current
@@ -350,7 +372,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
       || ehdr.e_phentsize != sizeof (struct Elf32_Phdr)
       || ehdr.e_phnum > 1024) 
     {
-      printf ("load: %s: error loading executable\n", file_name);
+      printf ("load: %s: error loading executable\n", t->name);
       goto done; 
     }
 
@@ -567,64 +589,64 @@ setup_stack (void **esp)
 void
 construct_stack (char *file_name_, void **esp)
 {
-	int i, j;
-	char *token, *save_ptr;
-	char argv[32][20] = {{0, }, };
-	char argl[32] = {0, };
-	int extra_space[32];
-	int argc = 0;
-	void *argv_addr = NULL;
-	size_t input_strlen = strlen(file_name_) + 1;
-	size_t word_align = 4 - input_strlen%4;
-	size_t buffer[28] = {0, };
+    int i, j;
+    char *token, *save_ptr;
+    char argv[32][20] = {{0, }, };
+    char argl[32] = {0, };
+    int extra_space[32];
+    int argc = 0;
+    void *argv_addr = NULL;
+    size_t input_strlen = strlen(file_name_) + 1;
+    size_t word_align = 4 - input_strlen%4;
+    size_t buffer[28] = {0, };
 
-	/* Since file_name_ is a copy, feel free to modify. */
-	for (token = strtok_r (file_name_, " ", &save_ptr);
-		 token != NULL;
-		 token = strtok_r (NULL, " ", &save_ptr))
-		strlcpy (argv[argc++], token, strlen (token) + 1);
+    /* Since file_name_ is a copy, feel free to modify. */
+    for (token = strtok_r (file_name_, " ", &save_ptr);
+         token != NULL;
+         token = strtok_r (NULL, " ", &save_ptr))
+        strlcpy (argv[argc++], token, strlen (token) + 1);
 
-	/* Check for extra blanks. */
-	for (i = 0, j = 0; i < argc; ++i)
-	{
+    /* Check for extra blanks. */
+    for (i = 0, j = 0; i < argc; ++i)
+    {
 
-		/* Save the length of each argument. */
-		argl[i] = strlen (argv[i]);
+        /* Save the length of each argument. */
+        argl[i] = strlen (argv[i]);
 
-		/* j is the index to the next argument.*/
-		j += argl[i];
-		if (i)
-			j++;
+        /* j is the index to the next argument. */
+        j += argl[i];
+        if (i)
+            j++;
 
-		/* Find extra spaces in string. */
-		for (extra_space[i] = 0;
-			 file_name_[j + 1] == ' ';
-			 ++extra_space[i], file_name_[j + 1] = '\0', ++j);
-	}
+        /* Find extra spaces in string. */
+        for (extra_space[i] = 0;
+             file_name_[j + 1] == ' ';
+             ++extra_space[i], file_name_[j + 1] = '\0', ++j);
+    }
 
-	/* Move ESP for input string.*/
-	*esp -= input_strlen;
-	memcpy (*esp, file_name_, input_strlen);
+    /* Move ESP for input string. */
+    *esp -= input_strlen;
+    memcpy (*esp, file_name_, input_strlen);
 
-	/* Save the first address of ARGV. */
-	argv_addr = *esp;
-	
-	/* Mov ESP for address. */
-	*esp -= word_align + (argc + 4)*sizeof(size_t);
+    /* Save the first address of ARGV. */
+    argv_addr = *esp;
 
-	/* Store everything in BUFFER, then copy it to stack. */
-	buffer[0] = 0;
-	buffer[1] = argc;
-	buffer[2] = (size_t) (*esp) + 3*sizeof(size_t);
-	for (i = 0; i < argc; ++i)
-	{
-		buffer[3 + i] = (size_t) argv_addr;
-		argv_addr += argl[i] + 1 + extra_space[i];
-	}
-	buffer[3 + argc] = 0;
+    /* Mov ESP for address. */
+    *esp -= word_align + (argc + 4)*sizeof(size_t);
 
-	/* Copy everything in buffer to stack */
-	memcpy (*esp, buffer, (argc + 4)*sizeof(size_t));
+    /* Store everything in BUFFER, then copy it to stack. */
+    buffer[0] = 0;
+    buffer[1] = argc;
+    buffer[2] = (size_t) (*esp) + 3*sizeof(size_t);
+    for (i = 0; i < argc; ++i)
+    {
+        buffer[3 + i] = (size_t) argv_addr;
+        argv_addr += argl[i] + 1 + extra_space[i];
+    }
+    buffer[3 + argc] = 0;
+
+    /* Copy everything in buffer to stack */
+    memcpy (*esp, buffer, (argc + 4)*sizeof(size_t));
 }
 
 /* Adds a mapping from user virtual address UPAGE to kernel

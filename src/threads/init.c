@@ -36,6 +36,7 @@
 #include "devices/ide.h"
 #include "filesys/filesys.h"
 #include "filesys/fsutil.h"
+#include "filesys/directory.h" //????
 #endif
 
 /* Page directory with kernel mappings only. */
@@ -318,6 +319,9 @@ run_actions (char **argv)
 #endif
       {NULL, 0, NULL},
     };
+
+  /* ???? */
+  dir_open_root ();
 
   while (*argv != NULL)
     {

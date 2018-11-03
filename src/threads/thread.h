@@ -99,18 +99,29 @@ struct thread
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
 
-	/* New elements. */
-	struct thread *parent;              /* Pointer to parent. */
-	struct list children;               /* List of children. */
-	struct list_elem siblings;          /* list_elem for children. */
+    /* New elements. */
+    struct thread *parent;              /* Pointer to parent. */
+    struct list children;               /* List of children. */
+    struct list_elem siblings;          /* list_elem for children. */
 
-	/* Volatile for busy wait */
-	volatile bool SJW;                  /* Condition variable for busy waiting. */
-	volatile bool LKY;                  /* Set if this thread is currently busy waiting. */
+    /* Volatile for busy wait */
+    volatile bool SJW;                  /* Condition variable for busy waiting. */
+    volatile bool LKY;                  /* Set if this thread is currently busy waiting. */
 
-	int exit_status;                    /* Exit status. */
-	bool needs_wait;                    /* If process is waited, set false. */
-	bool is_loaded;                     /* If load fails, set false. */
+    int exit_status;                    /* Exit status. */
+    bool needs_wait;                    /* If process is waited, set false. */
+    bool is_loaded;                     /* If load fails, set false. */
+
+    /* New for Project 2 */
+    struct semaphore sema_wait;
+    struct semaphore sema_exit;
+    struct semaphore sema_load;
+
+    bool is_child_zombie;
+
+    int fd_next;
+    struct list file_list;
+    struct file *rfile;
 #endif
 
     /* Owned by thread.c. */
@@ -120,6 +131,16 @@ struct thread
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
+
+#ifdef USERPROG
+struct file_wrapper
+{
+    int fd;
+    struct file *f;
+    struct list_elem file_elem;
+};
+#endif
+
 extern bool thread_mlfqs;
 
 void thread_init (void);

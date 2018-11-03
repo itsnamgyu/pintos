@@ -341,25 +341,26 @@ cond_broadcast (struct condition *cond, struct lock *lock)
 #ifdef USERPROG
 void busy_waits (struct thread* t)
 {
-	/* If it is already waiting, return. */
-	if (t->LKY)
-		return;
+    /* If it is already waiting, return. */
+    if (t->LKY)
+        return;
 
-	/* Busy waiting. */
-	t->LKY = true;
-	
-	/* barrier () to block compiler optimization. */
-	while (t->SJW == false)
-		barrier ();
+    /* Busy waiting. */
+    t->LKY = true;
 
-	/* Set false for further waits. */
-	t->SJW = false;
-	t->LKY = false;
+    /* barrier () to block compiler optimization. */
+    while (t->SJW == false)
+        thread_yield();
+        //barrier ();
+
+    /* Set false for further waits. */
+    t->SJW = false;
+    t->LKY = false;
 }
 
 void busy_end (struct thread* t)
 {
-	/* Stops busy waiting of t. */
-	t->SJW = true;
+    /* Stops busy waiting of t. */
+    t->SJW = true;
 }
 #endif
