@@ -28,7 +28,9 @@ static struct file *fd2file (int);
 void
 syscall_init (void) 
 {
+    /* Initiate lock variable for use. */
     lock_init(&syscall_lock);
+
     intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
