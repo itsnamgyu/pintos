@@ -132,6 +132,8 @@ process_wait (tid_t child_tid)
     struct list_elem *e;
     int exit_status;
 
+    /* What happens for zombie processes? Is it safe to assume
+     * that a child process is still running? */
     e = list_head (&parent->children);
     while ((e = list_next (e)) != list_end (&parent->children))
     {
@@ -140,7 +142,13 @@ process_wait (tid_t child_tid)
         /* Wait for child only if it needs to be waited. */
         if (child_tid == child->tid && child->needs_wait)
         {
-            /* Parent waits for child with TID to execute. */
+            /* Parent starts waiting for child. */
+            child->needs_wait = false;
+
+            /* Parent waits for child with TID to execute. 
+             * If the child ends before parents wait, there
+             * is no waiting of parent by the following
+             * sema_down() since sema has value 1. */
             sema_down (&child->sema_wait);
 
             /* EXIT_STATUS should be retrieved;
@@ -150,13 +158,9 @@ process_wait (tid_t child_tid)
             /* Since EXIT_STATUS is retrieved, child
              * is allowed to exit. */
             sema_up (&child->sema_exit);
-
-            /* Child no longer needs to be waited. */
-            child->needs_wait = false;
-
-            /* If no waiting is done, child should be NULL. */
             break;
         }
+        /* If no waiting is done, child should be NULL. */
         child = NULL;
     }
 
@@ -320,7 +324,7 @@ static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
                           bool writable);
-void construct_stack (char *file_name, void **esp);   /*KYU*/
+void push_arguments (char *file_name, void **esp);   /*KYU*/
 
 /* Loads an ELF executable from FILE_NAME into the current thread.
    Stores the executable's entry point into *EIP
@@ -434,7 +438,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   file_name_[i] = '\0';
 
   /* Argument passing. */
-  construct_stack (file_name_, esp);
+  push_arguments (file_name_, esp);
 
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
@@ -574,9 +578,29 @@ setup_stack (void **esp)
   return success;
 }
 
+/* Adds a mapping from user virtual address UPAGE to kernel
+   virtual address KPAGE to the page table.
+   If WRITABLE is true, the user process may modify the page;
+   otherwise, it is read-only.
+   UPAGE must not already be mapped.
+   KPAGE should probably be a page obtained from the user pool
+   with palloc_get_page().
+   Returns true on success, false if UPAGE is already mapped or
+   if memory allocation fails. */
+static bool
+install_page (void *upage, void *kpage, bool writable)
+{
+  struct thread *th = thread_current ();
+
+  /* Verify that there's not already a page at that virtual
+     address, then map our page there. */
+  return (pagedir_get_page (th->pagedir, upage) == NULL
+          && pagedir_set_page (th->pagedir, upage, kpage, writable));
+}
+
 /* Push the arguments passed to esp. */
 void
-construct_stack (char *file_name_, void **esp)
+push_arguments (char *file_name_, void **esp)
 {
     int i, j;
     char *token, *save_ptr;
@@ -598,7 +622,6 @@ construct_stack (char *file_name_, void **esp)
     /* Check for extra blanks. */
     for (i = 0, j = 0; i < argc; ++i)
     {
-
         /* Save the length of each argument. */
         argl[i] = strlen (argv[i]);
 
@@ -638,22 +661,4 @@ construct_stack (char *file_name_, void **esp)
     memcpy (*esp, buffer, (argc + 4)*sizeof(size_t));
 }
 
-/* Adds a mapping from user virtual address UPAGE to kernel
-   virtual address KPAGE to the page table.
-   If WRITABLE is true, the user process may modify the page;
-   otherwise, it is read-only.
-   UPAGE must not already be mapped.
-   KPAGE should probably be a page obtained from the user pool
-   with palloc_get_page().
-   Returns true on success, false if UPAGE is already mapped or
-   if memory allocation fails. */
-static bool
-install_page (void *upage, void *kpage, bool writable)
-{
-  struct thread *th = thread_current ();
 
-  /* Verify that there's not already a page at that virtual
-     address, then map our page there. */
-  return (pagedir_get_page (th->pagedir, upage) == NULL
-          && pagedir_set_page (th->pagedir, upage, kpage, writable));
-}

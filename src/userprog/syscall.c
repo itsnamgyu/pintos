@@ -103,14 +103,14 @@ syscall_handler (struct intr_frame *f UNUSED)
                 exit (-1);
 
             f->eax = read ((int) *(uint32_t *) (f_esp + WORD),
-                    (void *) *(uint32_t *) (f_esp + 2*WORD),
-                    (unsigned) *((uint32_t *) (f_esp + 3*WORD)));
+                           (void *) *(uint32_t *) (f_esp + 2*WORD),
+                           (unsigned) *((uint32_t *) (f_esp + 3*WORD)));
             break;
 
         case SYS_WRITE:
             f->eax = write ((int) *(uint32_t *) (f_esp + WORD),
-                    (void*) *(uint32_t *) (f_esp + 2*WORD),
-                    (unsigned) *((uint32_t *) (f_esp + 3*WORD)));
+                            (void*) *(uint32_t *) (f_esp + 2*WORD),
+                            (unsigned) *((uint32_t *) (f_esp + 3*WORD)));
             break;
 
         case SYS_SEEK:
@@ -182,8 +182,17 @@ exec (const char *file)
     tid = process_execute(file);
     
     /* Starts loading after returning from process_execute()
-     * wait for child to load. */
-    sema_down (&t->sema_load);
+     * wait for child to load.
+     * Might be a little risky to wait for child to UP parent's
+     * semaphore, however, in this code it is guaranteed to UP
+     * the parent in any case. */
+    if (tid != TID_ERROR)
+        sema_down (&t->sema_load);
+
+    /*  If process_execute failed for some reason, (thread_create()
+     *  failed) return error code. */
+    else
+        tid = TID_ERROR;
 
     /* In this part of the code, parent should find out whether
      * the child successfuly loaded its execute file. 
@@ -203,7 +212,9 @@ exec (const char *file)
     {
         /* Reset for re-use. */
         t->is_child_loaded = false;
-        tid = -1;
+
+        /* #define TID_ERROR (tid_t) -1 */
+        tid = TID_ERROR;
     }
 
     /* Case 3): Return the tid of child. */
@@ -445,9 +456,8 @@ bool
 is_user_valid (const void *addr)
 {
     /* NULL address, kernel address, invalid page. */
-    if (addr 
-            && is_user_vaddr (addr)
-            && pagedir_get_page (thread_current ()->pagedir, addr))
+    if (addr && is_user_vaddr (addr)
+             && pagedir_get_page (thread_current ()->pagedir, addr))
         return true;
     else
         return false;

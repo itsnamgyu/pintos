@@ -177,8 +177,6 @@ thread_create (const char *name, int priority,
 
   ASSERT (function != NULL);
 
-  //printf("[debug] thread_create(): current thread is %s\n", thread_current ()->name);
-
   /* Allocate thread. */
   t = palloc_get_page (PAL_ZERO);
   if (t == NULL)
@@ -483,16 +481,17 @@ init_thread (struct thread *t, const char *name, int priority)
 #ifdef USERPROG
   /* Initialize new members added. */
   list_init (&t->children);
-  //t->SJW = false;
-  //t->LKY = false;
   t->exit_status = 0;
   t->needs_wait = true;
   t->is_loaded = false;
 
-  /*Project 2*/
+  /* A semaphore initialized to 1 is for waiting for some
+   * event to happen once. */
   sema_init (&t->sema_load, 0);
   sema_init (&t->sema_wait, 0);
   sema_init (&t->sema_exit, 0);
+
+  /* Default status. */
   t->is_child_loaded = false;
   t->fd_next = 2;
   list_init (&t->file_list);

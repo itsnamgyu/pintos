@@ -107,12 +107,11 @@ struct thread
     int exit_status;                    /* Exit status. */
     bool needs_wait;                    /* If process is waited, set false. */
     bool is_loaded;                     /* If load fails, set false. */
+    bool is_child_loaded;               /* To check whether child is loaded. */
 
     struct semaphore sema_load;         /* For start_process(). */
     struct semaphore sema_wait;         /* For process_wait(). */
     struct semaphore sema_exit;         /* For process_exit(). */
-
-    bool is_child_loaded;               /* To check whether child is loaded. */
 
     int fd_next;                        /* Vairable to store the next fd. */
     struct list file_list;              /* List of open files. */
