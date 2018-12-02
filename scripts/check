@@ -82,29 +82,30 @@ if [[ $# == 2 ]]; then
 					TEST=$i
 					RESULT="tests/threads/$TEST.result"
 					make -s $RESULT
-					echo "$n: `head -1 $RESULT`"
+          printf "%02d: " $n
+					echo "`head -1 $RESULT` $TEST"
 					n=$((n+1))
 				done
 				notify "pintos tests complete"
 			elif [[ $2 == "basic" ]]; then
 				cd $PINTOS/src/threads/build/
-				make check
 				for i in ${thread_tests_basic[*]}; do
 					TEST=$i
 					RESULT="tests/threads/$TEST.result"
 					make -s $RESULT
-					echo "$n: `head -1 $RESULT`"
+          printf "%02d: " $n
+					echo "`head -1 $RESULT` $TEST"
 					n=$((n+1))
 				done
 				notify "pintos tests complete"
 			elif [[ $2 == "advanced" ]]; then
 				cd $PINTOS/src/threads/build/
-				make check
 				for i in ${thread_tests_advanced[*]}; do
 					TEST=$i
 					RESULT="tests/threads/$TEST.result"
 					make -s $RESULT
-					echo "$n: `head -1 $RESULT`"
+          printf "%02d: " $n
+					echo "`head -1 $RESULT` $TEST"
 					n=$((n+1))
 				done
 				notify "pintos tests complete"
