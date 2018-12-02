@@ -1,0 +1,2 @@
+cd ~/pintos/src/
+make clean

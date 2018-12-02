@@ -1,0 +1,7 @@
+if [[ -f KEY ]]; then
+	KEY=`cat KEY`
+
+	if [[ $KEY != "" ]]; then
+		curl -X POST -H 'Content-type: application/json' --data "{\"text\":\"$1\"}" $KEY
+	fi
+fi

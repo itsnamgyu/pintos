@@ -1,0 +1,75 @@
+declare -a thread_tests=(
+"alarm-multiple"
+"alarm-negative"
+"alarm-priority"
+"alarm-simultaneous"
+"alarm-single"
+"alarm-zero"
+"mlfqs-block"
+"mlfqs-fair-2"
+"mlfqs-fair-20"
+"mlfqs-load-1"
+"mlfqs-load-60"
+"mlfqs-load-avg"
+"mlfqs-nice-10"
+"mlfqs-nice-2"
+"mlfqs-recent-1"
+"priority-change"
+"priority-condvar"
+"priority-donate-chain"
+"priority-donate-lower"
+"priority-donate-multiple"
+"priority-donate-multiple2"
+"priority-donate-nest"
+"priority-donate-one"
+"priority-donate-sema"
+"priority-fifo"
+"priority-preempt"
+"priority-sema"
+)
+
+if [[ $# == 0 ]]; then
+	echo "Usage: check project [test_index | all]."
+	echo "Note: currently only implemented \"check thread [test_index]\""
+fi
+
+if [[ $# == 1 ]]; then
+	case $1 in
+		"thread")
+			n=0
+			for i in ${thread_tests[*]}; do
+				echo "$n: $i"
+				n=$((n+1))
+			done
+			;;
+		*)
+			echo "invalid mode $1"
+			;;
+	esac
+fi
+
+if [[ $# == 2 ]]; then
+	case $1 in
+		"thread")
+			if [[ $2 == "all" ]]; then
+				cd $PINTOS/src/threads/build/
+				make check
+				notify "pintos tests complete"
+			fi
+
+			if [[ $2 < ${#thread_tests[@]} ]]; then
+				cd $PINTOS/src/threads/build/
+				TEST="${thread_tests[$2]}"
+				RESULT="tests/threads/$TEST.result"
+				make -s $RESULT
+				cat $RESULT
+				notify "$TEST: `cat $RESULT`"
+			else
+				echo "invalid test index $2"
+			fi
+			;;
+		*)
+			echo "invalid mode $1"
+			;;
+	esac
+fi
