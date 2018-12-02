@@ -1,3 +1,18 @@
+/*                       ___           ___           ___                      */
+/*                      /\  \         |\__\         /\__\                     */
+/*                     /::\  \        |:|  |       /:/  /                     */
+/*                    /:/\:\  \       |:|  |      /:/  /                      */
+/*                   /:/  \:\  \      |:|__|__   /:/  /  ___                  */
+/*                  /:/__/_\:\__\     /::::\__\ /:/__/  /\__\                 */
+/*                  \:\  /\ \/__/    /:/~~/~    \:\  \ /:/  /                 */
+/*                   \:\ \:\__\     /:/  /       \:\  /:/  /                  */
+/*                    \:\/:/  /     \/__/         \:\/:/  /                   */
+/*                     \::/  /                     \::/  /                    */
+/*                      \/__/                       \/__/                     */
+/*                                                                            */
+/*                                                                            */
+/*                                                   -Modified by Namgyu Ho   */
+
 #include "devices/timer.h"
 #include <debug.h>
 #include <inttypes.h>
@@ -7,7 +22,7 @@
 #include "threads/interrupt.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
-  
+
 /* See [8254] for hardware details of the 8254 timer chip. */
 
 #if TIMER_FREQ < 19
@@ -30,6 +45,26 @@ static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
 static void real_time_delay (int64_t num, int32_t denom);
 
+/*-----------------------------------GYU--------------------------------------*/
+
+/*
+ * list_less_func for ordered insertion to jeepers_sleepers -GYU
+ */
+static bool
+expires_earlier(const struct list_elem *a, const struct list_elem *b, void *aux)
+{
+	struct thread *ta = list_entry(a, struct thread, elem);
+	struct thread *tb = list_entry(b, struct thread, elem);
+	return ta->timer_expiry < tb->timer_expiry;
+}
+
+/*
+ * List of sleeping threads (ordered) -GYU
+ */
+static struct list jeepers_sleepers;
+
+/*----------------------------------------------------------------------------*/
+
 /* Sets up the timer to interrupt TIMER_FREQ times per second,
    and registers the corresponding interrupt. */
 void
@@ -37,6 +72,9 @@ timer_init (void)
 {
   pit_configure_channel (0, 2, TIMER_FREQ);
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
+/*-----------------------------------GYU--------------------------------------*/
+  list_init(&jeepers_sleepers);
+/*----------------------------------------------------------------------------*/
 }
 
 /* Calibrates loops_per_tick, used to implement brief delays. */
@@ -84,17 +122,33 @@ timer_elapsed (int64_t then)
   return timer_ticks () - then;
 }
 
+/*-----------------------------------GYU--------------------------------------*/
+
 /* Sleeps for approximately TICKS timer ticks.  Interrupts must
    be turned on. */
+
+/*
+ * Disable interrupts, calculate ending time and add to timer queue
+ * that will be monitored by the system timer (timer_interrupt()), block
+ * the thread and wait for the system to unblock it. -GYU
+ */
 void
 timer_sleep (int64_t ticks) 
 {
   int64_t start = timer_ticks ();
-
+  int64_t end = start + ticks;
   ASSERT (intr_get_level () == INTR_ON);
-  while (timer_elapsed (start) < ticks) 
-    thread_yield ();
+
+  enum intr_level old_level = intr_disable();
+
+  thread_current()->timer_expiry = end;
+  list_insert_ordered(&jeepers_sleepers, &thread_current()->elem, expires_earlier, NULL);
+  thread_block();
+
+  intr_set_level(old_level);
 }
+
+/*----------------------------------------------------------------------------*/
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
    turned on. */
@@ -166,13 +220,34 @@ timer_print_stats (void)
   printf ("Timer: %"PRId64" ticks\n", timer_ticks ());
 }
 
+
+/*-----------------------------------GYU--------------------------------------*/
+
 /* Timer interrupt handler. */
+
+/*
+ * Check if there are any threads to wake up (and wake them up == send them
+ * to the ready queue). Note that jeepers_sleepers is already sorted.
+ */
 static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
+
+  struct list_elem *e;
+  for (e = list_begin(&jeepers_sleepers);
+      e != list_end(&jeepers_sleepers); ) {
+    struct thread *t = list_entry(e, struct thread, elem);
+    if (t->timer_expiry <= ticks) {
+      e = list_remove(e);
+      thread_unblock(t);
+    } else break;
+  }
+
   thread_tick ();
 }
+
+/*----------------------------------------------------------------------------*/
 
 /* Returns true if LOOPS iterations waits for more than one timer
    tick, otherwise false. */

@@ -95,6 +95,14 @@ struct thread
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
+	/*
+	 * 
+	 *
+	 */
+
+	/* Used by timer.c. */
+	int64_t timer_expiry;               /* Time to wake from sleep */
+
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
