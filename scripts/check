@@ -30,12 +30,12 @@ declare -a thread_tests=(
 
 if [[ $# == 0 ]]; then
 	echo "Usage: check project [test_index | all]."
-	echo "Note: currently only implemented \"check thread [test_index]\""
+	echo "Note: currently only implemented \"check threads [test_index]\""
 fi
 
 if [[ $# == 1 ]]; then
 	case $1 in
-		"thread")
+		"threads")
 			n=0
 			for i in ${thread_tests[*]}; do
 				echo "$n: $i"
@@ -50,7 +50,7 @@ fi
 
 if [[ $# == 2 ]]; then
 	case $1 in
-		"thread")
+		"threads")
 			if [[ $2 == "all" ]]; then
 				cd $PINTOS/src/threads/build/
 				make check

@@ -24,7 +24,7 @@ Usage: check *project* [*test_index* | all].
 Just try this (after setup)
 
 ```
-check thread
+check threads
 ```
 
 
