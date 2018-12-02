@@ -1,4 +1,4 @@
 cd "$PINTOS/src/"
 make clean
 cd threads/
-make build
+make
