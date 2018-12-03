@@ -144,6 +144,11 @@ struct file_wrapper
 };
 #endif
 
+/*-----------------------------------GYU--------------------------------------*/
+#ifndef USERPROG
+extern bool thread_aging;
+#endif
+/*----------------------------------------------------------------------------*/
 extern bool thread_mlfqs;
 
 void thread_init (void);

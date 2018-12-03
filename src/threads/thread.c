@@ -33,6 +33,12 @@
 #include "userprog/process.h"
 #endif
 
+/*-----------------------------------GYU--------------------------------------*/
+#ifndef USERPROG
+bool thread_aging;
+#endif
+/*----------------------------------------------------------------------------*/
+
 #include <limits.h>
 
 /* Random value for struct thread's `magic' member.
