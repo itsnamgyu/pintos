@@ -1,3 +1,18 @@
+/*                       ___           ___           ___                      */
+/*                      /\  \         |\__\         /\__\                     */
+/*                     /::\  \        |:|  |       /:/  /                     */
+/*                    /:/\:\  \       |:|  |      /:/  /                      */
+/*                   /:/  \:\  \      |:|__|__   /:/  /  ___                  */
+/*                  /:/__/_\:\__\     /::::\__\ /:/__/  /\__\                 */
+/*                  \:\  /\ \/__/    /:/~~/~    \:\  \ /:/  /                 */
+/*                   \:\ \:\__\     /:/  /       \:\  /:/  /                  */
+/*                    \:\/:/  /     \/__/         \:\/:/  /                   */
+/*                     \::/  /                     \::/  /                    */
+/*                      \/__/                       \/__/                     */
+/*                                                                            */
+/*                                                                            */
+/*                                                   -Modified by Namgyu Ho   */
+
 #include "threads/thread.h"
 #include <debug.h>
 #include <stddef.h>
@@ -11,6 +26,9 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+/*-----------------------------------GYU--------------------------------------*/
+#include "threads/gyu.h"
+/*----------------------------------------------------------------------------*/
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -218,6 +236,18 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
+
+/*-----------------------------------GYU--------------------------------------*/
+
+  // yield current thread so that the new thread with higher priority can be
+  // dispatched by the scheduler
+  //if (priority > thread_curent()->priority)
+  if (thread_get_priority() < priority) {
+    thread_yield();
+  }
+
+/*----------------------------------------------------------------------------*/
+
   return tid;
 }
 
@@ -254,7 +284,10 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_push_back (&ready_list, &t->elem);
+/*-----------------------------------GYU--------------------------------------*/
+  // list_push_back (&ready_list, &t->elem);
+  list_insert_ordered(&ready_list, &t->elem, higher_priority, NULL);
+/*----------------------------------------------------------------------------*/
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -324,8 +357,13 @@ thread_yield (void)
   ASSERT (!intr_context ());
 
   old_level = intr_disable ();
-  if (cur != idle_thread) 
-    list_push_back (&ready_list, &cur->elem);
+  if (cur != idle_thread) {
+/*-----------------------------------GYU--------------------------------------*/
+    // list_push_back (&ready_list, &cur->elem);
+    list_insert_ordered(&ready_list, &cur->elem, higher_priority, NULL);
+/*----------------------------------------------------------------------------*/
+  }
+
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -348,12 +386,34 @@ thread_foreach (thread_action_func *func, void *aux)
     }
 }
 
+/*-----------------------------------GYU--------------------------------------*/
+
 /* Sets the current thread's priority to NEW_PRIORITY. */
+
+/*
+ * If the priority is lower than the next thread to be scheudled, then yield the
+ * current thread so that the next thread w/ higher priority can be dispatched.
+ */
 void
 thread_set_priority (int new_priority) 
 {
+  int old_priority = thread_current()->priority;
   thread_current ()->priority = new_priority;
+
+  struct list_elem *ready_begin = list_begin(&ready_list);
+  struct list_elem *ready_end = list_end(&ready_list);
+
+  if (ready_begin!= ready_end) {  // some thread is waiting
+    struct thread *next_thread = list_entry(ready_begin, struct thread, elem);
+    ASSERT(next_thread->priority <= old_priority);
+
+    if (new_priority < next_thread->priority) {
+      thread_yield();
+    }
+  }
 }
+
+/*----------------------------------------------------------------------------*/
 
 /* Returns the current thread's priority. */
 int

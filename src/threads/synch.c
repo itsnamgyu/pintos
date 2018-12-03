@@ -26,12 +26,30 @@
    MODIFICATIONS.
 */
 
+/*                       ___           ___           ___                      */
+/*                      /\  \         |\__\         /\__\                     */
+/*                     /::\  \        |:|  |       /:/  /                     */
+/*                    /:/\:\  \       |:|  |      /:/  /                      */
+/*                   /:/  \:\  \      |:|__|__   /:/  /  ___                  */
+/*                  /:/__/_\:\__\     /::::\__\ /:/__/  /\__\                 */
+/*                  \:\  /\ \/__/    /:/~~/~    \:\  \ /:/  /                 */
+/*                   \:\ \:\__\     /:/  /       \:\  /:/  /                  */
+/*                    \:\/:/  /     \/__/         \:\/:/  /                   */
+/*                     \::/  /                     \::/  /                    */
+/*                      \/__/                       \/__/                     */
+/*                                                                            */
+/*                                                                            */
+/*                                                   -Modified by Namgyu Ho   */
+
 #include "threads/synch.h"
 #include <stdio.h>
 #include <string.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "devices/timer.h"
+/*-----------------------------------GYU--------------------------------------*/
+#include "threads/gyu.h"
+/*----------------------------------------------------------------------------*/
 
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
@@ -69,7 +87,13 @@ sema_down (struct semaphore *sema)
   old_level = intr_disable ();
   while (sema->value == 0) 
     {
-      list_push_back (&sema->waiters, &thread_current ()->elem);
+/*-----------------------------------GYU--------------------------------------*/
+      // insert sema waiter in order of higher priority (highest priority thread
+      // goes to the front)
+      // list_push_back (&sema->waiters, &thread_current ()->elem);
+      list_insert_ordered(&sema->waiters, &thread_current ()->elem,
+                          higher_priority, NULL);
+/*----------------------------------------------------------------------------*/
       thread_block ();
     }
   sema->value--;
@@ -102,6 +126,7 @@ sema_try_down (struct semaphore *sema)
   return success;
 }
 
+
 /* Up or "V" operation on a semaphore.  Increments SEMA's value
    and wakes up one thread of those waiting for SEMA, if any.
 
@@ -114,11 +139,24 @@ sema_up (struct semaphore *sema)
   ASSERT (sema != NULL);
 
   old_level = intr_disable ();
-  if (!list_empty (&sema->waiters)) 
-    thread_unblock (list_entry (list_pop_front (&sema->waiters),
-                                struct thread, elem));
+
+  bool preempt = false;
+  if (!list_empty (&sema->waiters)) {
+    struct thread *thread;
+    thread = list_entry(list_pop_front (&sema->waiters), struct thread, elem);
+
+    thread_unblock (thread);
+    preempt = (thread_get_priority() < thread->priority);
+  }
+
   sema->value++;
   intr_set_level (old_level);
+
+/*-----------------------------------GYU--------------------------------------*/
+  // if the awaken thread has a higher priority than the current thread,
+  // then preempt!
+  if (preempt) thread_yield();
+/*----------------------------------------------------------------------------*/
 }
 
 static void sema_test_helper (void *sema_);
