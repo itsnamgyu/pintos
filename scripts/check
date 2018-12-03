@@ -38,18 +38,15 @@ declare -a thread_tests_basic=(
 )
 
 declare -a thread_tests_advanced=(
-"alarm-single"
-"alarm-multiple"
-"alarm-simultaneous"
-"alarm-priority"
-"alarm-zero"
-"alarm-negative"
-"priority-change"
-"priority-change-2"
-"priority-fifo"
-"priority-preempt"
-"priority-sema"
-"priority-aging"
+"mlfqs-block"
+"mlfqs-fair-2"
+"mlfqs-fair-20"
+"mlfqs-load-1"
+"mlfqs-load-60"
+"mlfqs-load-avg"
+"mlfqs-nice-2"
+"mlfqs-nice-10"
+"mlfqs-recent-1"
 )
 
 if [[ $# == 0 ]]; then
@@ -89,25 +86,35 @@ if [[ $# == 2 ]]; then
 				notify "pintos tests complete"
 			elif [[ $2 == "basic" ]]; then
 				cd $PINTOS/src/threads/build/
-				for i in ${thread_tests_basic[*]}; do
-					TEST=$i
-					RESULT="tests/threads/$TEST.result"
+
+				for I in ${thread_tests_basic[*]}; do
+					RESULT="tests/threads/$I.result"
 					make -s $RESULT
+        done
+
+				for I in ${thread_tests_basic[*]}; do
+					RESULT="tests/threads/$I.result"
           printf "%02d: " $n
-					echo "`head -1 $RESULT` $TEST"
+					echo "`head -1 $RESULT` $I"
 					n=$((n+1))
 				done
+
 				notify "pintos tests complete"
 			elif [[ $2 == "advanced" ]]; then
 				cd $PINTOS/src/threads/build/
-				for i in ${thread_tests_advanced[*]}; do
-					TEST=$i
-					RESULT="tests/threads/$TEST.result"
+
+				for I in ${thread_tests_advanced[*]}; do
+					RESULT="tests/threads/$I.result"
 					make -s $RESULT
+        done
+
+				for I in ${thread_tests_advanced[*]}; do
+					RESULT="tests/threads/$I.result"
           printf "%02d: " $n
-					echo "`head -1 $RESULT` $TEST"
+					echo "`head -1 $RESULT` $I"
 					n=$((n+1))
 				done
+
 				notify "pintos tests complete"
 			elif (( $2 < ${#thread_tests[@]} )); then
 				cd $PINTOS/src/threads/build/
