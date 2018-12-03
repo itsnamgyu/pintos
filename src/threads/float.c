@@ -16,7 +16,7 @@
 #include "threads/float.h"
 #include <stdint.h>
 
-#define Q 14
+const int Q = 14;
 
 int int_plus_float(int i, int f) {
   return (i << Q) + f;

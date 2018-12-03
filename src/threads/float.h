@@ -15,6 +15,7 @@
 
 #pragma once
 
+extern const int Q;
 
 int int_plus_float(int i, int f);
 
