@@ -109,7 +109,7 @@ if [[ $# == 2 ]]; then
 					n=$((n+1))
 				done
 				notify "pintos tests complete"
-			elif [[ $2 < ${#thread_tests[@]} ]]; then
+			elif (( $2 < ${#thread_tests[@]} )); then
 				cd $PINTOS/src/threads/build/
 				TEST="${thread_tests[$2]}"
 				RESULT="tests/threads/$TEST.result"
