@@ -110,13 +110,14 @@ struct thread
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
-	/*
-	 * 
-	 *
-	 */
-
+/*-----------------------------------GYU--------------------------------------*/
 	/* Used by timer.c. */
-	int64_t timer_expiry;               /* Time to wake from sleep */
+	int64_t timer_expiry;                 /* Time to wake from sleep */
+
+  /* Used by BSD scheduler */
+  int nice;                             /* H */
+  int recent_cpu;                       /* O */
+/*----------------------------------------------------------------------------*/
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -196,5 +197,10 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+/*-----------------------------------GYU--------------------------------------*/
+int ready_threads(void);
+int thread_next_priority(void);
+/*----------------------------------------------------------------------------*/
 
 #endif /* threads/thread.h */

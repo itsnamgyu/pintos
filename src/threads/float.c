@@ -51,13 +51,13 @@ int float_minus_float(int f1, int f2) {
   return f1 - f2;
 }
 
-int float_times_float(int f, int i) {
-  int64_t precise = ((int64_t) f * i) >> Q;
+int float_times_float(int f1, int f2) {
+  int64_t precise = ((int64_t) f1 * f2) >> Q;
   return (int) precise;
 }
 
 int float_over_float(int f1, int f2) {
   // int less_precise = f1 / (f2 >> Q);
-  int64_t precise = (((int64_t) f1) << Q /  f2);
+  int64_t precise = (((int64_t) f1 << Q) /  f2);
   return (int) precise;
 }

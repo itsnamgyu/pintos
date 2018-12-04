@@ -26,7 +26,7 @@ int int_times_float(int i, int f);
 int int_over_float(int i, int f);
 
 
-int float_minus_float(int f, int i);
+int float_minus_int(int f, int i);
 
 int float_over_int(int f, int i);
 

@@ -22,6 +22,8 @@
 #include "threads/interrupt.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
+#include "threads/gyu.h"
+#include "threads/float.h"
 
 /* See [8254] for hardware details of the 8254 timer chip. */
 
@@ -46,12 +48,13 @@ static void real_time_sleep (int64_t num, int32_t denom);
 static void real_time_delay (int64_t num, int32_t denom);
 
 /*-----------------------------------GYU--------------------------------------*/
-
 /*
  * list_less_func for ordered insertion to jeepers_sleepers -GYU
  */
 static bool
-expires_earlier(const struct list_elem *a, const struct list_elem *b, void *aux)
+expires_earlier(const struct list_elem *a,
+                const struct list_elem *b,
+                void *aux UNUSED)
 {
 	struct thread *ta = list_entry(a, struct thread, elem);
 	struct thread *tb = list_entry(b, struct thread, elem);
@@ -62,7 +65,6 @@ expires_earlier(const struct list_elem *a, const struct list_elem *b, void *aux)
  * List of sleeping threads (ordered) -GYU
  */
 static struct list jeepers_sleepers;
-
 /*----------------------------------------------------------------------------*/
 
 /* Sets up the timer to interrupt TIMER_FREQ times per second,
@@ -123,7 +125,6 @@ timer_elapsed (int64_t then)
 }
 
 /*-----------------------------------GYU--------------------------------------*/
-
 /* Sleeps for approximately TICKS timer ticks.  Interrupts must
    be turned on. */
 
@@ -147,7 +148,6 @@ timer_sleep (int64_t ticks)
 
   intr_set_level(old_level);
 }
-
 /*----------------------------------------------------------------------------*/
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -234,6 +234,7 @@ timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
 
+  // check for threads to wake up
   struct list_elem *e;
   for (e = list_begin(&jeepers_sleepers);
       e != list_end(&jeepers_sleepers); ) {
@@ -242,6 +243,30 @@ timer_interrupt (struct intr_frame *args UNUSED)
       e = list_remove(e);
       thread_unblock(t);
     } else break;
+  }
+
+  // check 
+  if (thread_aging || thread_mlfqs) {
+    if (true) {
+      // 1. increment recent_cpu
+      thread_current()->recent_cpu += 1 << Q;
+    }
+
+    if (ticks % 4 == 0) {
+      // 1. update all priority
+      thread_foreach(thread_update_priority, NULL);
+
+      // yield if priority has been inverted
+      if (thread_current()->priority < thread_next_priority())
+        intr_yield_on_return();
+    }
+
+    if (ticks % TIMER_FREQ == 0) {
+      // 1. update load_avg
+      update_load_avg();
+      // 2. update all recent_cpu
+      thread_foreach(thread_update_recent_cpu, NULL);
+    }
   }
 
   thread_tick ();

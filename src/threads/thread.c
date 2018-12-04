@@ -19,6 +19,7 @@
 #include <random.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdint.h>
 #include "threads/flags.h"
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
@@ -32,12 +33,6 @@
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
-
-/*-----------------------------------GYU--------------------------------------*/
-#ifndef USERPROG
-bool thread_aging;
-#endif
-/*----------------------------------------------------------------------------*/
 
 #include <limits.h>
 
@@ -84,6 +79,12 @@ static unsigned thread_ticks;   /* # of timer ticks since last yield. */
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
 bool thread_mlfqs;
+/*-----------------------------------GYU--------------------------------------*/
+#ifndef USERPROG
+bool thread_aging;
+#endif
+/*----------------------------------------------------------------------------*/
+
 
 static void kernel_thread (thread_func *, void *aux);
 
@@ -115,12 +116,20 @@ thread_init (void)
 {
   ASSERT (intr_get_level () == INTR_OFF);
 
+/*-----------------------------------GYU--------------------------------------*/
+  init_load_avg();
+/*----------------------------------------------------------------------------*/
+
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
+  initial_thread->recent_cpu= 0;
+  initial_thread->nice = 0;
+  // note that on init_thread, recent/nice is self-inherited and priority is
+  // calculated accordingly
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
@@ -236,22 +245,20 @@ thread_create (const char *name, int priority,
 
 #ifdef USERPROG
   /* Assign parent and add to children list. */
-  t->parent = thread_current ();
-  list_push_front (&thread_current ()->children, &t->siblings);
+  t->parent = thread_current();
+  list_push_front (&t->parent->children, &t->siblings);
 #endif
 
   /* Add to run queue. */
   thread_unblock (t);
 
 /*-----------------------------------GYU--------------------------------------*/
-
   // yield current thread so that the new thread with higher priority can be
-  // dispatched by the scheduler
-  //if (priority > thread_curent()->priority)
+  // dispatched by the scheduler.
+  // this is also applicable to the thread_aging case
   if (thread_get_priority() < priority) {
     thread_yield();
   }
-
 /*----------------------------------------------------------------------------*/
 
   return tid;
@@ -393,7 +400,6 @@ thread_foreach (thread_action_func *func, void *aux)
 }
 
 /*-----------------------------------GYU--------------------------------------*/
-
 /* Sets the current thread's priority to NEW_PRIORITY. */
 
 /*
@@ -403,23 +409,13 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  int old_priority = thread_current()->priority;
-  thread_current ()->priority = new_priority;
-
-  struct list_elem *ready_begin = list_begin(&ready_list);
-  struct list_elem *ready_end = list_end(&ready_list);
-
-  if (ready_begin!= ready_end) {  // some thread is waiting
-    struct thread *next_thread = list_entry(ready_begin, struct thread, elem);
-    ASSERT(next_thread->priority <= old_priority);
-
-    if (new_priority < next_thread->priority) {
+  if (!thread_mlfqs) {
+    thread_current ()->priority = new_priority;
+    if (new_priority < thread_next_priority()) {
       thread_yield();
     }
   }
 }
-
-/*----------------------------------------------------------------------------*/
 
 /* Returns the current thread's priority. */
 int
@@ -432,32 +428,36 @@ thread_get_priority (void)
 void
 thread_set_nice (int nice UNUSED) 
 {
-  /* Not yet implemented. */
+  struct thread *current = thread_current();
+  current->nice = nice;
+
+  thread_update_priority(current, NULL);
+  if (current->priority < thread_next_priority())
+    thread_yield();
 }
 
 /* Returns the current thread's nice value. */
 int
 thread_get_nice (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  return thread_current()->nice;
 }
 
 /* Returns 100 times the system load average. */
 int
 thread_get_load_avg (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  return (int) (((int64_t) get_load_avg() * 100) >> Q);
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  const int recent_cpu = thread_current()->recent_cpu;
+  return (int) (((int64_t) recent_cpu * 100) >> Q);
 }
+/*----------------------------------------------------------------------------*/
 
 /* Idle thread.  Executes when no other thread is ready to run.
 
@@ -542,7 +542,16 @@ init_thread (struct thread *t, const char *name, int priority)
   t->status = THREAD_BLOCKED;
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
-  t->priority = priority;
+/*-----------------------------------GYU--------------------------------------*/
+  if (thread_aging) {
+    // you should check for priority inversion after call to init_thread
+    t->nice = running_thread()->priority;
+    t->recent_cpu = running_thread()->recent_cpu;
+    thread_update_priority(t, NULL);
+  } else {
+    t->priority = priority;
+  }
+/*----------------------------------------------------------------------------*/
   t->magic = THREAD_MAGIC;
   list_push_back (&all_list, &t->allelem);
 
@@ -678,3 +687,26 @@ allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+
+
+/*-----------------------------------GYU--------------------------------------*/
+/*
+ * get number of ready threads, including the currently running thread (unless
+ * it is the idle thread
+ */
+int ready_threads () {
+  int count = list_size(&ready_list);
+  int current = (thread_current() != idle_thread);
+  return count + current ;
+}
+
+/*
+ * get priority of the next thread if it exists
+ */
+int thread_next_priority() {
+  if (!list_empty(&ready_list))
+    return list_entry(list_front(&ready_list), struct thread, elem)->priority;
+  else
+    return -1;  // since PRI_MIN == 0
+}
+/*----------------------------------------------------------------------------*/
