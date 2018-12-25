@@ -1,0 +1,7 @@
+if [[ -f $PINTOS/scripts/KEY ]]; then
+	KEY=`cat $PINTOS/scripts/KEY`
+
+	if [[ $KEY != "" ]]; then
+		curl -X POST -H 'Content-type: application/json' --data "{\"text\":\"$1\"}" $KEY
+	fi
+fi

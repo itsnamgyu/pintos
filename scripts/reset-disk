@@ -1,0 +1,2 @@
+mv ~/pintos/src/userprog/filesys.dsk ~/pintos/src/userprog/filesys.dsk.bak
+pintos-mkdisk filesys.dsk --filesys-size=2
