@@ -142,9 +142,9 @@ syscall_handler (struct intr_frame *f UNUSED)
 
         case SYS_SUM_OF_FOUR_INTEGERS:
             sum_of_four_integers ((int) *(uint32_t *) (f_esp + WORD),
-                    (int) *(uint32_t *) (f_esp + 2*WORD),
-                    (int) *(uint32_t *) (f_esp + 3*WORD),
-                    (int) *(uint32_t *) (f_esp + 4*WORD));
+                                  (int) *(uint32_t *) (f_esp + 2*WORD),
+                                  (int) *(uint32_t *) (f_esp + 3*WORD),
+                                  (int) *(uint32_t *) (f_esp + 4*WORD));
             break;
     }
 }
@@ -189,8 +189,8 @@ exec (const char *file)
     if (tid != TID_ERROR)
         sema_down (&t->sema_load);
 
-    /*  If process_execute failed for some reason, (thread_create()
-     *  failed) return error code. */
+    /* If process_execute failed for some reason, (thread_create()
+     * failed) return error code. */
     else
         tid = TID_ERROR;
 

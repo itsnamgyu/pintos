@@ -214,12 +214,20 @@ process_exit (void)
   /* Close all open files */
   while (!list_empty (&cur->file_list))
   {
-    e = list_pop_front (&cur->file_list);
-    fw = list_entry (e, struct file_wrapper, file_elem);
+      e = list_pop_front (&cur->file_list);
+      fw = list_entry (e, struct file_wrapper, file_elem);
 
-    /* Why not close(fw->fd)? */
-    file_close (fw->f);
-    free(fw);
+      /* Why not close(fw->fd)? */
+      file_close (fw->f);
+      free(fw);
+  }
+
+  /* Let any waiting children exit. */
+  e = list_head (&cur->children);
+  while ((e = list_next (e)) != list_end (&cur->children))
+  {
+      child = list_entry (e, struct thread, siblings);
+      sema_up (&child->sema_exit);
   }
 
   /* In this part of code, parent is still suspended, which cannot
@@ -234,9 +242,9 @@ exit:
   e = list_head (&parent->children);
   while ((e = list_next (e)) != list_end (&parent->children))
   {
-    child = list_entry (e, struct thread, siblings);
-    if (cur->tid == child->tid)
-      list_remove (e);
+      child = list_entry (e, struct thread, siblings);
+      if (cur->tid == child->tid)
+          list_remove (e);
   }
 }
 
@@ -442,7 +450,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
-
   success = true;
 
  done:
@@ -660,5 +667,4 @@ push_arguments (char *file_name_, void **esp)
     /* Copy everything in buffer to stack */
     memcpy (*esp, buffer, (argc + 4)*sizeof(size_t));
 }
-
 

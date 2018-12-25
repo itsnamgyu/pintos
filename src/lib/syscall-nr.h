@@ -30,9 +30,9 @@ enum
     SYS_ISDIR,                  /* Tests if a fd represents a directory. */
     SYS_INUMBER,                /* Returns the inode number for a fd. */
 
-	/* Project 2 extra */
-	SYS_FIBONACCI,              /* Returns the n'th fibonacci number. */
-	SYS_SUM_OF_FOUR_INTEGERS    /* Returns the sum of four integers. */
+    /* Project 2 extra */
+    SYS_FIBONACCI,              /* Returns the n'th fibonacci number. */
+    SYS_SUM_OF_FOUR_INTEGERS    /* Returns the sum of four integers. */
   };
 
 #endif /* lib/syscall-nr.h */

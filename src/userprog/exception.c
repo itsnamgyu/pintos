@@ -9,6 +9,9 @@
 #include "syscall.h"
 #include "lib/user/syscall.h"
 
+#include "pagedir.h"
+#include "threads/palloc.h"
+
 /* Number of page faults processed. */
 static long long page_fault_cnt;
 
@@ -154,18 +157,37 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-  /* If it is not a valid address, exit. */
-  if (!user || is_kernel_vaddr(fault_addr) || not_present)
-    exit(-1);
+#ifdef VM
+  uint8_t *new_page;
+  static void *new_size = (uint8_t *)PHYS_BASE - PGSIZE*2; 
 
-  /* To implement virtual memory, delete the rest of the function
-     body, and replace it with code that brings in the page to
-     which fault_addr refers. */
-  printf ("Page fault at %p: %s error %s page in %s context.\n",
-          fault_addr,
-          not_present ? "not present" : "rights violation",
-          write ? "writing" : "reading",
-          user ? "user" : "kernel");
+  /* Stack growth. */
+  if (not_present && write && user && is_user_vaddr(fault_addr))
+  {
+      /* Non-growable region. */
+      if (pg_round_up (fault_addr) <= PHYS_BASE - (1<<23))
+          exit (-1);
 
-  kill (f);
+      else
+      {
+          new_page = palloc_get_page (PAL_USER + PAL_ZERO);
+
+          /* Page allocation failed. */
+          if (!new_page)
+              exit (-1);
+
+          else
+              pagedir_set_page (thread_current ()->pagedir, new_size, new_page, true);
+      }
+      new_size -= PGSIZE;
+  }
+
+  else
+      exit (-1);
+
+#else
+  /* To handle page faults in project USERPROG. */
+  exit(-1);
+
+#endif
 }

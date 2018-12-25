@@ -485,8 +485,8 @@ init_thread (struct thread *t, const char *name, int priority)
   t->needs_wait = true;
   t->is_loaded = false;
 
-  /* A semaphore initialized to 1 is for waiting for some
-   * event to happen once. */
+  /* A semaphore initialized to 0 is for waiting for some
+   * event to happen. */
   sema_init (&t->sema_load, 0);
   sema_init (&t->sema_wait, 0);
   sema_init (&t->sema_exit, 0);
